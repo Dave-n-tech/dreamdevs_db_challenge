@@ -5,10 +5,10 @@ const analyticsController = new AnalyticsController();
 
 const router = Router();
 
-router.get("/top-merchant", analyticsController.getTopMerchant);
-router.get("/monthly-active-merchants", analyticsController.getMonthlyActiveMerchants)
-router.get("/product-adoption", analyticsController.getProductAdoption)
-router.get("/kyc-funnel", analyticsController.getKycFunnel)
-router.get("/failure-rates", analyticsController.getFailureRates)
+router.get("/top-merchant", (req, res) => analyticsController.getTopMerchant(req, res));
+router.get("/monthly-active-merchants", (req, res) => analyticsController.getMonthlyActiveMerchants(req, res));
+router.get("/product-adoption", (req, res) => analyticsController.getProductAdoption(req, res));
+router.get("/kyc-funnel", (req, res) => analyticsController.getKycFunnel(req, res));
+router.get("/failure-rates", (req, res) => analyticsController.getFailureRates(req, res));
 
 export default router;

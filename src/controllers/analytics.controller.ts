@@ -1,17 +1,18 @@
-import { Response } from "express";
+import { Request, Response } from "express";
 import * as AnalyticsService from "../services/analytics.service";
 
 export default class AnalyticsController {
-  async getTopMerchant(res: Response) {
+  async getTopMerchant(req: Request, res: Response) {
     try {
       const topMerchant = await AnalyticsService.getTopMerchant();
-      res.status(200).json(topMerchant);
+      res.json(topMerchant);
     } catch (error) {
+      console.error("Error in getTopMerchant:", error);
       res.status(500).json({ error: "Failed to retrieve top merchant data" });
     }
   }
 
-  async getMonthlyActiveMerchants(res: Response) {
+  async getMonthlyActiveMerchants(req: Request, res: Response) {
     try {
       const monthlyActiveMerchants =
         await AnalyticsService.getMonthlyActiveMerchants();
@@ -23,7 +24,7 @@ export default class AnalyticsController {
     }
   }
 
-  async getProductAdoption(res: Response) {
+  async getProductAdoption(req: Request, res: Response) {
     try {
       const productAdoption = await AnalyticsService.getProductAdoption();
       res.status(200).json(productAdoption);
@@ -34,7 +35,7 @@ export default class AnalyticsController {
     }
   }
 
-  async getKycFunnel(res: Response) {
+  async getKycFunnel(req: Request, res: Response) {
     try {
       const kycFunnel = await AnalyticsService.getKycFunnel();
       res.status(200).json(kycFunnel);
@@ -43,7 +44,7 @@ export default class AnalyticsController {
     }
   }
 
-  async getFailureRates(res: Response) {
+  async getFailureRates(req: Request, res: Response) {
     try {
       const failureRates = await AnalyticsService.getFailureRates();
       res.status(200).json(failureRates);

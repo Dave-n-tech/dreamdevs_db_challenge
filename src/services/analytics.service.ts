@@ -1,113 +1,115 @@
 import prisma from "../config/prisma";
-import { EventType, ProductType } from "../generated/prisma/enums";
+import { EventType, StatusType } from "../generated/prisma/enums";
 
 export const getTopMerchant = async () => {
-  const successfulTransactions = await prisma.event.findMany({
+  const grouped = await prisma.event.groupBy({
+    by: ["merchant_id"],
     where: {
-      status: "SUCCESS",
+      status: StatusType.SUCCESS,
     },
-  });
-  const merchantTotalAmounts = successfulTransactions.reduce(
-    (acc: Record<string, number>, transaction) => {
-      const merchantId = transaction.merchant_id;
-      const amount = parseFloat(transaction.amount.toNumber().toFixed(2));
-      acc[merchantId] = (acc[merchantId] || 0) + amount;
-      return acc;
+    _sum: {
+      amount: true,
     },
-    {},
-  );
+    orderBy: {
+      _sum: {
+        amount: "desc",
+      },
+    },
+    take: 1,
+  }) as { merchant_id: string; _sum: { amount: number | null } }[];
 
-  const sorted = Object.entries(merchantTotalAmounts).sort(
-    (a, b) => b[1] - a[1],
-  );
+  if (grouped.length === 0) {
+    return null;
+  }
 
-  const topMerchant = sorted[0]
-    ? { merchant_id: sorted[0][0], total_amount: sorted[0][1] }
-    : null;
+  const top = grouped[0];
 
-  return topMerchant;
+  if(!top) {
+    return null;
+  }
+  
+  if (!top._sum.amount) {
+    return null;
+  }
+
+  return {
+    merchant_id: top.merchant_id,
+    total_amount: parseFloat(top._sum.amount.toFixed(2)),
+  };
 };
 
 export const getMonthlyActiveMerchants = async () => {
-  const successfulEvents = await prisma.event.findMany({
-    where: {
-      status: "SUCCESS",
-    },
-  });
-
-  const monthlyMerchants: Record<string, Set<string>> = {};
-
-  successfulEvents.forEach((event) => {
-    if (!event.event_timestamp) return;
-    
-    const month = event.event_timestamp.toISOString().slice(0, 7);
-    if (!monthlyMerchants[month]) {
-      monthlyMerchants[month] = new Set();
-    }
-    monthlyMerchants[month].add(event.merchant_id);
-  });
+  const rows = await prisma.$queryRaw<
+    { month: Date; active_merchants: bigint }[]
+  >`
+    SELECT
+      date_trunc('month', event_timestamp) AS month,
+      COUNT(DISTINCT merchant_id) AS active_merchants
+    FROM "Event"
+    WHERE status = ${StatusType.SUCCESS}
+      AND event_timestamp IS NOT NULL
+    GROUP BY 1
+    ORDER BY 1
+  `;
 
   const monthlyActiveMerchantsCount: Record<string, number> = {};
-  for (const month in monthlyMerchants) {
-    if (monthlyMerchants[month]) {
-      monthlyActiveMerchantsCount[month] = monthlyMerchants[month].size;
-    }
-  }
+  rows.forEach((row) => {
+    const monthKey = row.month.toISOString().slice(0, 7);
+    monthlyActiveMerchantsCount[monthKey] = Number(row.active_merchants);
+  });
 
   return monthlyActiveMerchantsCount;
 };
 
 export const getProductAdoption = async () => {
-  const successfulEvents = await prisma.event.findMany({
+  const grouped = await prisma.event.groupBy({
+    by: ["product"],
     where: {
-      status: "SUCCESS",
+      status: StatusType.SUCCESS,
     },
-  });
+    _count: {
+      _all: true,
+    },
+  }) as { product: string; _count: { _all: number } }[];
 
   const productAdoption: Record<string, number> = {};
-
-  successfulEvents.forEach((event) => {
-    const product = event.product;
-    if (!productAdoption[product]) {
-      productAdoption[product] = 0;
-    }
-    productAdoption[product]++;
+  grouped.forEach((row) => {
+    productAdoption[row.product] = row._count._all;
   });
 
   return productAdoption;
 };
 
 export const getKycFunnel = async () => {
-  const kycEvents = await prisma.event.findMany({
-    where: {
-      event_type: {
-        in: [
-          EventType.DOCUMENT_SUBMITTED,
-          EventType.VERIFICATION_COMPLETED,
-          EventType.TIER_UPGRADE,
-        ],
-      },
-      status: "SUCCESS",
-    },
-  });
+  const rows = await prisma.$queryRaw<
+    { event_type: EventType; merchant_count: bigint }[]
+  >`
+    SELECT
+      event_type,
+      COUNT(DISTINCT merchant_id) AS merchant_count
+    FROM "Event"
+    WHERE status = ${StatusType.SUCCESS}
+      AND event_type IN (
+        ${EventType.DOCUMENT_SUBMITTED},
+        ${EventType.VERIFICATION_COMPLETED},
+        ${EventType.TIER_UPGRADE}
+      )
+    GROUP BY event_type
+  `;
 
-  const funnel: {
-    documents_submitted: Set<string>;
-    verifications_completed: Set<string>;
-    tier_upgrades: Set<string>;
-  } = {
-    documents_submitted: new Set(),
-    verifications_completed: new Set(),
-    tier_upgrades: new Set(),
+  const funnel = {
+    documents_submitted: 0,
+    verifications_completed: 0,
+    tier_upgrades: 0,
   };
 
-  kycEvents.forEach((event) => {
-    if (event.event_type === EventType.DOCUMENT_SUBMITTED) {
-      funnel.documents_submitted.add(event.merchant_id);
-    } else if (event.event_type === EventType.VERIFICATION_COMPLETED) {
-      funnel.verifications_completed.add(event.merchant_id);
-    } else if (event.event_type === EventType.TIER_UPGRADE) {
-      funnel.tier_upgrades.add(event.merchant_id);
+  rows.forEach((row) => {
+    if (row.event_type === EventType.DOCUMENT_SUBMITTED) {
+      funnel.documents_submitted = Number(row.merchant_count);
+    } else if (row.event_type === EventType.VERIFICATION_COMPLETED) {
+      funnel.verifications_completed = Number(row.merchant_count);
+    } else if (row.event_type === EventType.TIER_UPGRADE) {
+      funnel.tier_upgrades = Number(row.merchant_count);
     }
   });
 
@@ -115,39 +117,41 @@ export const getKycFunnel = async () => {
 };
 
 export const getFailureRates = async () => {
-  const failedEvents = await prisma.event.findMany({
+  const totals = await prisma.event.groupBy({
+    by: ["product"],
     where: {
-      status: "FAILED",
+      status: {
+        not: StatusType.PENDING,
+      },
     },
-  });
+    _count: {
+      _all: true,
+    },
+  }) as { product: string; _count: { _all: number } }[];
 
-  const failureRates: {
-    product: string;
-    failure_rate: number;
-  }[] = [];
+  const failed = await prisma.event.groupBy({
+    by: ["product"],
+    where: {
+      status: StatusType.FAILED,
+    },
+    _count: {
+      _all: true,
+    },
+  }) as { product: string; _count: { _all: number } }[];
 
   const failedCounts: Record<string, number> = {};
-
-  failedEvents.forEach((event) => {
-    const product = event.product;
-    failedCounts[product] = (failedCounts[product] || 0) + 1;
+  failed.forEach((row) => {
+    failedCounts[row.product] = row._count._all;
   });
 
-  for (const product in failedCounts) {
-    const total = await prisma.event.count({
-      where: {
-        product: product as ProductType,
-        status: {
-          not: "PENDING",
-        },
-      },
-    });
-    failureRates.push({
-      product,
-      failure_rate:
-        total > 0 ? ((failedCounts[product] ?? 0) / total) * 100 : 0,
-    });
-  }
+  const failureRates = totals.map((row) => {
+    const total = row._count._all;
+    const failedCount = failedCounts[row.product] ?? 0;
+    return {
+      product: row.product,
+      failure_rate: total > 0 ? (failedCount / total) * 100 : 0,
+    };
+  });
 
   return failureRates.sort((a, b) => b.failure_rate - a.failure_rate);
 };
