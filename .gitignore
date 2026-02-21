@@ -8,5 +8,4 @@ dist/
 data/
 src/generated/prisma
 import.sql
-src/scripts/importCsv.ts
 .DS_Store

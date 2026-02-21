@@ -149,7 +149,8 @@ export const getFailureRates = async () => {
     const failedCount = failedCounts[row.product] ?? 0;
     return {
       product: row.product,
-      failure_rate: total > 0 ? (failedCount / total) * 100 : 0,
+      failure_rate:
+        total > 0 ? parseFloat(((failedCount / total) * 100).toFixed(1)) : 0,
     };
   });
 
