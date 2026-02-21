@@ -7,7 +7,6 @@ export default class AnalyticsController {
       const topMerchant = await AnalyticsService.getTopMerchant();
       res.json(topMerchant);
     } catch (error) {
-      console.error("Error in getTopMerchant:", error);
       res.status(500).json({ error: "Failed to retrieve top merchant data" });
     }
   }
