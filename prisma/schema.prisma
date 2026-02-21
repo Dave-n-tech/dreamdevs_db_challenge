@@ -1,0 +1,96 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+
+model Event {
+  event_id        String   @id @default(uuid())
+  merchant_id     String
+  event_timestamp DateTime?
+  product         ProductType
+  event_type      EventType
+  amount          Decimal
+  status          StatusType
+  channel         ChannelType
+  region          String
+  merchant_tier   MerchantTier
+}
+
+enum ProductType {
+  POS
+  AIRTIME
+  BILLS
+  CARD_PAYMENT
+  SAVINGS
+  MONIEBOOK
+  KYC
+}
+
+enum StatusType {
+  SUCCESS
+  FAILED
+  PENDING
+}
+
+enum ChannelType {
+  POS
+  APP
+  USSD
+  WEB
+  OFFLINE
+}
+
+enum MerchantTier {
+  STARTER
+  VERIFIED
+  PREMIUM
+}
+
+enum EventType {
+  // POS
+  CARD_TRANSACTION
+  CASH_WITHDRAWAL
+  TRANSFER
+  
+  // AIRTIME
+  AIRTIME_PURCHASE
+  DATA_PURCHASE
+  
+  // BILLS
+  ELECTRICITY
+  CABLE_TV
+  INTERNET
+  WATER
+  BETTING
+  
+  // CARD_PAYMENT
+  SUPPLIER_PAYMENT
+  INVOICE_PAYMENT
+  
+  // SAVINGS
+  DEPOSIT
+  WITHDRAWAL
+  INTEREST_CREDIT
+  AUTO_SAVE
+  
+  // MONIEBOOK
+  SALE_RECORDED
+  INVENTORY_UPDATE
+  EXPENSE_LOGGED
+  
+  // KYC
+  DOCUMENT_SUBMITTED
+  VERIFICATION_COMPLETED
+  TIER_UPGRADE
+} 
